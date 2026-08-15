@@ -1,0 +1,68 @@
+All slice planes are valid, begin slicing operations
+nozzleTemp: 200.0 
+
+initialNozzleTemp: 205.0 
+
+bedTemp: 60.0 
+
+initialBedTemp: 65.0 
+
+infillPercentage: 20.0 
+
+shellThickness: 3 
+
+layerHeight: 0.3 
+
+printSpeed: 100.0 
+
+initialPrintSpeed: 50.0 
+
+travelSpeed: 150.0 
+
+initialTravelSpeed: 100.0 
+
+enableZHop: True 
+
+enableRetraction: True 
+
+Retraction Distance: 1.0 
+
+Retraction Speed: 20.0 
+
+enableSupports: False 
+
+enableBrim: False 
+
+Slicing one STL
+__________________________________
+Chunk #: 0
+Starting timer for currentChunk Mesh Sections (PARALLEL)
+Mesh Sections took  0.25557756423950195 seconds. 
+
+Starting timer for Shells (PARALLEL)
+Shells took  0.08929586410522461 seconds. 
+
+Starting timer for Getting Manifold & Internal Areas (SERIES)
+Traceback (most recent call last):
+  File "/mnt/d/gitdesktop/Fractal-Cortex/fractal-cortex/slicer_main.py", line 1622, in <module>
+    main()  # Call the main function
+    ^^^^^^
+  File "/mnt/d/gitdesktop/Fractal-Cortex/fractal-cortex/slicer_main.py", line 1618, in main
+    pyglet.app.run()                                    # Run the pyglet main loop
+    ^^^^^^^^^^^^^^^^
+  File "/mnt/d/Downloads-HDD/iharm3d-3.7/venv/lib/python3.11/site-packages/pyglet/app/__init__.py", line 107, in run
+    event_loop.run()
+  File "/mnt/d/Downloads-HDD/iharm3d-3.7/venv/lib/python3.11/site-packages/pyglet/app/base.py", line 170, in run
+    platform_event_loop.step(timeout)
+  File "/mnt/d/Downloads-HDD/iharm3d-3.7/venv/lib/python3.11/site-packages/pyglet/app/xlib.py", line 108, in step
+    if device.poll():
+       ^^^^^^^^^^^^^
+  File "/mnt/d/Downloads-HDD/iharm3d-3.7/venv/lib/python3.11/site-packages/pyglet/app/xlib.py", line 88, in poll
+    return self._event.isSet()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/threading.py", line 579, in isSet
+    warnings.warn('isSet() is deprecated, use is_set() instead',
+DeprecationWarning: isSet() is deprecated, use is_set() instead
+Getting Manifold & Internal Areas took  0.06366324424743652 seconds. 
+
+Starting timer for Internal Infill & Respective Path Optimization (PARALLEL)

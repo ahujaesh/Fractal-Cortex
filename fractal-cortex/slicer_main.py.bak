@@ -66,153 +66,44 @@ class Camera:  # Sets initial camera instance variables
         self.panningSensitivity = 0.5
 
 """ Calculation Worker Class """
-class CalculationWorker:
-    """Background worker for CPU-intensive slicing calculations."""
-
+class CalculationWorker: # Used for Multithreading
     def __init__(self):
-        print(">>> INITIALIZING CALCULATION WORKER")
-
-        self.task_queue = queue.Queue()
-        self.result_queue = queue.Queue()
-
-        self.thread_pool = ThreadPoolExecutor(max_workers=4)
-        self.running = True
-
-        print(">>> CALCULATION WORKER INITIALIZED")
-
+        self.task_queue = queue.Queue()                         # Stores tasks to be processed
+        self.result_queue = queue.Queue()                       # Stores completed results
+        self.thread_pool = ThreadPoolExecutor(max_workers=4)    # Creates 4 worker threads
+        self.running = True                                     # Controls worker lifecycle
+        
     def start(self):
-        """Start the background queue-processing thread."""
-        print(">>> STARTING CALCULATION WORKER")
-
-        threading.Thread(
-            target=self.process_queue,
-            daemon=True
-        ).start()
-
-        print(">>> CALCULATION WORKER STARTED")
-
+        # Launches daemon thread that processes queued tasks
+        threading.Thread(target=self.process_queue, daemon=True).start()
+        
     def process_queue(self):
-        """Wait for tasks and submit them to the thread pool."""
-
-        print(">>> WORKER PROCESS QUEUE THREAD ENTERED")
-
         while self.running:
             try:
+                # Get next task from queue
                 task = self.task_queue.get(timeout=0.1)
-
-                print(">>> WORKER TASK RECEIVED")
-                print(">>> task function:", getattr(task["function"], "__name__", task["function"]))
-                print(">>> task callback:", getattr(task["callback"], "__name__", task["callback"]))
-
-                # Submit the actual slicing operation.
-                future = self.thread_pool.submit(
-                    task["function"],
-                    *task["args"]
-                )
-
-                print(">>> FUTURE CREATED")
-                print(">>> future:", future)
-
-                # IMPORTANT:
-                # The Future completion callback executes on the worker thread.
-                # It does NOT directly touch the GUI.
-                def future_done_callback(
-                    completed_future,
-                    callback=task["callback"],
-                    progress_callback=task.get("progress_callback")
-                ):
-                    try:
-                        print(">>> FUTURE DONE CALLBACK ENTERED")
-                        print(
-                            ">>> completed_future.done():",
-                            completed_future.done()
-                        )
-                        print(
-                            ">>> completed_future.cancelled():",
-                            completed_future.cancelled()
-                        )
-
-                        # Put the completed Future into the result queue.
-                        #
-                        # The pyglet GUI thread will later retrieve this
-                        # through check_calculation_results().
-                        self.result_queue.put(
-                            (
-                                callback,
-                                completed_future,
-                                progress_callback
-                            )
-                        )
-
-                        print(">>> FUTURE PLACED IN RESULT QUEUE")
-
-                    except Exception as e:
-                        import traceback
-
-                        print("!!! ERROR IN FUTURE DONE CALLBACK !!!")
-                        print("Exception type:", type(e).__name__)
-                        print("Exception:", repr(e))
-                        traceback.print_exc()
-
-                future.add_done_callback(future_done_callback)
-
-                print(">>> DONE CALLBACK REGISTERED")
-
-                self.task_queue.task_done()
-
+                # Execute task in thread pool
+                future = self.thread_pool.submit(task['function'], *task['args']) 
+                # Store result and callback
+                future.add_done_callback(lambda f, cb=task['callback'], 
+                                              prog_cb=task.get('progress_callback'): 
+                                              self.result_queue.put((cb, f, prog_cb)))
             except queue.Empty:
                 continue
-
-            except Exception as e:
-                import traceback
-
-                print("!!! WORKER PROCESS QUEUE ERROR !!!")
-                print("Exception type:", type(e).__name__)
-                print("Exception:", repr(e))
-                traceback.print_exc()
-
-        print(">>> WORKER PROCESS QUEUE THREAD EXITING")
-
+        # Clean shutdown
         self.thread_pool.shutdown(wait=False)
-
-    def add_task(
-        self,
-        function,
-        callback,
-        *args,
-        progress_callback=None
-    ):
-        """Add a calculation to the worker queue."""
-
-        print(">>> ADDING TASK TO WORKER QUEUE")
-        print(
-            ">>> function:",
-            getattr(function, "__name__", function)
-        )
-        print(
-            ">>> callback:",
-            getattr(callback, "__name__", callback)
-        )
-
-        self.task_queue.put(
-            {
-                "function": function,
-                "callback": callback,
-                "progress_callback": progress_callback,
-                "args": args
-            }
-        )
-
-        print(">>> TASK ADDED TO WORKER QUEUE")
+                
+    def add_task(self, function, callback, *args, progress_callback=None):
+        # Adds new task to queue with function to run, callback to handle result, and arguments
+        self.task_queue.put({
+            'function': function,
+            'callback': callback,
+            'progress_callback': progress_callback,
+            'args': args
+        })
 
     def stop(self):
-        """Stop the worker."""
-
-        print(">>> STOPPING CALCULATION WORKER")
-
         self.running = False
-
-        print(">>> CALCULATION WORKER STOP REQUESTED")
 
 
 """ Graphics_Window Class """
@@ -275,223 +166,61 @@ class Graphics_Window(pyglet.window.Window):  # Custom pyglet window which conta
         self.modelViewMatrix = (GLdouble * 16)()
         self.viewportMatrix = (GLint * 4)()
 
-            # MULTITHREADING SETUP:
-        self.worker = CalculationWorker()
-        self.worker.start()
+        # MULTITHREADING SETUP:
+        self.worker = CalculationWorker()   # Creates instance of worker
+        self.worker.start()                 # Begins the worker thread
 
-        # Check for completed background calculations on the pyglet GUI thread.
-        pyglet.clock.schedule_interval(
-            self.check_calculation_results,
-            1 / 60.0
-        )
-
-        print(">>> CHECK CALLBACK SCHEDULED")
-
-        def test_clock(dt):
-            print(">>> PYGLET CLOCK IS TICKING")
-
-        pyglet.clock.schedule_interval(test_clock, 1.0)
+        pyglet.clock.schedule_interval(self.check_calculation_results, 1/60.0) # Checks for completed results at 60Hz (Probably doesn't need to be this fast)
 
         self.calculation_in_progress = False
 
-    def check_calculation_results(self, dt):
-        print(">>> CHECK_CALCULATION_RESULTS TICK")
-
-        """
-        Process completed background calculations on the pyglet GUI thread.
-
-        IMPORTANT:
-        This method must be a Graphics_Window class method, NOT nested
-        inside __init__(), because pyglet calls it later through the
-        scheduled clock callback.
-        """
-
+    def check_calculation_results(self, dt): # For Multithreading
         try:
-            processed_any = False
-
-            while True:
-                try:
-                    callback, future, progress_callback = (
-                        self.worker.result_queue.get_nowait()
-                    )
-
-                except queue.Empty:
-                    break
-
-                processed_any = True
-
-                print(">>> WORKER RESULT RECEIVED")
-                print(">>> future.done():", future.done())
-                print(">>> future.cancelled():", future.cancelled())
-
-                if future.cancelled():
-                    print("!!! FUTURE WAS CANCELLED !!!")
-                    self.calculation_in_progress = False
-                    continue
-
-                if not future.done():
-                    print(
-                        "!!! RESULT QUEUED BUT FUTURE IS NOT DONE !!!"
-                    )
-                    continue
-
-                try:
-                    # Retrieve the actual return value.
-                    # This will also re-raise an exception if the
-                    # background slicing operation failed.
-                    result = future.result()
-
-                    print(">>> FUTURE RESULT:", result)
-                    print(">>> CALLING COMPLETION CALLBACK")
-
-                    if callback is not None:
+            callback, future, progress_callback = self.worker.result_queue.get_nowait()
+            if future.done():
+                if callback:
+                    try:
+                        result = future.result()
                         callback(result)
-
-                    print(">>> COMPLETION CALLBACK FINISHED")
-
-                    self.calculation_in_progress = False
-
-                    print(
-                        ">>> calculation_in_progress = False"
-                    )
-
-                except Exception as e:
-                    import traceback
-
-                    print("!!! WORKER FUTURE FAILED !!!")
-                    print(
-                        "Exception type:",
-                        type(e).__name__
-                    )
-                    print(
-                        "Exception:",
-                        repr(e)
-                    )
-
-                    traceback.print_exc()
-
-                    self.calculation_in_progress = False
-
-            if processed_any:
-                print(">>> RESULT QUEUE PROCESSING COMPLETE")
-
-        except Exception as e:
-            import traceback
-
-            print("!!! check_calculation_results FAILED !!!")
-            print(
-                "Exception type:",
-                type(e).__name__
-            )
-            print(
-                "Exception:",
-                repr(e)
-            )
-
-            traceback.print_exc()
-
-            self.calculation_in_progress = False
+                    except Exception as e:
+                        print(f"Error processing result: {e}")
+                self.calculation_in_progress = False
+                        
+        except queue.Empty: # If there is nothing in the queue, pass
+            pass
 
     def queue_slicing_calculations(self, inputs):
-        """
-        Queue the slicing operation in the background worker.
-        """
-
-        print(">>> QUEUING SLICING CALCULATION")
-
         self.calculation_in_progress = True
-
-        self.worker.add_task(
-            self.slicing_calculations,
-            self.TEST_slicing_callback,
-            inputs,
-            progress_callback=self.update_slicing_progress
-        )
-
-        print(">>> SLICING CALCULATION QUEUED")
+        self.worker.add_task(self.slicing_calculations, self.TEST_slicing_callback, inputs, progress_callback=self.update_slicing_progress)
 
     def slicing_calculations(self, meshData):
-        """
-        Perform the actual slicing operation in the background worker.
-        """
-
-        print(">>> ENTERED slicing_calculations")
-
-        try:
-            slice_function(meshData)
-
-            print(">>> slice_function FINISHED")
-            print(">>> returning slicing result")
-
-            return "SLICING_COMPLETE"
-
-        except Exception as e:
-            import traceback
-
-            print("!!! SLICING CALCULATION FAILED !!!")
-            print(
-                "Exception type:",
-                type(e).__name__
-            )
-            print(
-                "Exception:",
-                repr(e)
-            )
-
-            traceback.print_exc()
-
-            raise
+        slice_function(meshData)
+        result = 'test'
+        return result
 
     def TEST_slicing_callback(self, result):
         """
-        Handle the completed slicing calculation in the
-        pyglet GUI/main thread.
+        Handle the completed calculation results in the main thread.
+        This will be called when calculations are done.
         """
-
-        print(">>> ENTERED TEST_slicing_callback")
-        print(">>> slicing result:", result)
-
-        try:
-            R_viewMode.set_disabled(False)
-            print(">>> R_viewMode enabled")
-        except Exception as e:
-            print(
-                "!!! R_viewMode.set_disabled failed:",
-                repr(e)
-            )
-
-        try:
-            R_printMode.set_disabled(False)
-            print(">>> R_printMode enabled")
-        except Exception as e:
-            print(
-                "!!! R_printMode.set_disabled failed:",
-                repr(e)
-            )
-
-        try:
-            sliceButtonDeck.set_state("B_saveGcodeAs")
-            print(">>> Save G-Code button state set")
-        except Exception as e:
-            print(
-                "!!! FAILED TO SET SAVE GCODE BUTTON:",
-                repr(e)
-            )
-
-        print(">>> Slicing Completed")
+        R_viewMode.set_disabled(False)
+        R_printMode.set_disabled(False)
+        sliceButtonDeck.set_state("B_saveGcodeAs")
+        # Print a simple completion message
+        print('Slicing Completed')
+        
+        # If you want to update the GUI, do it here
+        # For example, you could update a label:
+        # if hasattr(self, 'status_label'):
+        #     self.status_label.text = "Calculations complete!"
 
     def update_slicing_progress(self, progress):
-        """
-        Receive slicing progress updates.
-
-        Currently unused; retained so the worker can provide progress
-        updates later without changing the worker interface.
-        """
-
+        # Update progress bar or other UI elements
+        # self.progress_bar.value = progress * 100
         pass
 
     def on_close(self):
-        # Make sure to clean up the check_calculation_resultsorker when closing
+        # Make sure to clean up the worker when closing
         self.worker.stop()
         super().on_close()
         
@@ -1885,7 +1614,7 @@ def main():
     win.on_resize = custom_resize
 
     initialize_all_widgets(win.gui, win.windowHeight)  # Adds all default widgets to the screen
-    print(">>> ABOUT TO ENTER PYGLET APP LOOP")
+
     pyglet.app.run()                                    # Run the pyglet main loop
 
 

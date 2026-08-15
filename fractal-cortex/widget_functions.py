@@ -387,8 +387,11 @@ def slice_function(meshData):
         chunk_shellRingsListList, \
         chunk_optimizedInternalInfills, \
         chunk_optimizedSolidInfills
+
     update_values()
-    print_slicing_parameters() # Print all slicing parameters
+    print(">>> ENTERED slice_function")
+    print_slicing_parameters()
+
     printSettings = [
         nozzleTemp,
         initialNozzleTemp,
@@ -409,31 +412,71 @@ def slice_function(meshData):
         enableBrim,
     ]
 
-    if sliceButtonDeck.get_widget("B_slice").argsList[0][0] != []: # Only proceed with slicing if there are STL's to slice
+    if sliceButtonDeck.get_widget("B_slice").argsList[0][0] != []:
         printMode = R_printMode.currentlyChecked
 
         if printMode == "3-Axis Mode":
+
             (
                 transform3DList,
                 adhesionList,
                 shellRingsListList,
                 optimizedInternalInfills,
                 optimizedSolidInfills,
-            ) = slice_in_3_axes(printSettings, meshData)            
+            ) = slice_in_3_axes(printSettings, meshData)
+
+            print(">>> slice_in_3_axes RETURNED")
+            print(">>> slice_function FINISHED")
+
+            return (
+                transform3DList,
+                adhesionList,
+                shellRingsListList,
+                optimizedInternalInfills,
+                optimizedSolidInfills,
+            )
 
         elif printMode == "5-Axis Mode":
+
             numSlicingDirections = R_optionMode.D_variables['numSlicingDirections']
             startingPositions = R_optionMode.D_variables['startingPositions']
             directions = R_optionMode.D_variables['directions']
-            slicingDirections = [numSlicingDirections, startingPositions, directions]
-            
-            chunk_transform3DList, adhesionList, chunk_shellRingsListList, chunk_optimizedInternalInfills, chunk_optimizedSolidInfills = slice_in_5_axes(printSettings, meshData, slicingDirections)
 
-        sliceButtonDeck.get_widget("B_slice").clearVBOs = True  # Tracks if there is new slice data (Used for determining when to reset toolpath VBO's for "Preview" mode
-        R_viewMode.preRendered = False                          # Next time the "Preview" button is selected, toolpaths need to be regenerated
-        R_viewMode.set_disabled(False)
+            slicingDirections = [
+                numSlicingDirections,
+                startingPositions,
+                directions
+            ]
+
+            (
+                chunk_transform3DList,
+                adhesionList,
+                chunk_shellRingsListList,
+                chunk_optimizedInternalInfills,
+                chunk_optimizedSolidInfills
+            ) = slice_in_5_axes(
+                printSettings,
+                meshData,
+                slicingDirections
+            )
+
+            print(">>> slice_in_5_axes RETURNED")
+            print(">>> chunks:", len(chunk_transform3DList))
+            print(">>> slice_function FINISHED")
+
+            return (
+                chunk_transform3DList,
+                adhesionList,
+                chunk_shellRingsListList,
+                chunk_optimizedInternalInfills,
+                chunk_optimizedSolidInfills,
+            )
+
+    print(">>> slice_function: no slicing performed")
+    return None
 
 def save_gcode_as(fileName):
+    print(">>> ENTERED save_gcode_as()")
     global \
         printSettings, \
         transform3DList, \
