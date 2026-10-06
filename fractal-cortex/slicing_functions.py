@@ -44,6 +44,10 @@ from operator import add
 import os
 import warnings
 import sys
+import subprocess
+import tempfile
+import glob
+
 
 """
 Contains all calculations related to 3-axis and 5-axis slicing operations.
@@ -55,6 +59,355 @@ buildRadius = 150.0  # mm
 
 
 # DEFINE FUNCTIONS
+
+def convert_to_windows_path(wsl_path):
+    """Converts a WSL/Linux path to a Windows-compatible path."""
+    absolute_wsl_path = os.path.abspath(wsl_path)
+    result = subprocess.run(['wslpath', '-w', absolute_wsl_path], 
+                            capture_output=True, text=True, check=True)
+    return result.stdout.strip()
+
+def repair_3d_model(input_file, output_file):
+    # Path to where you saved the MeshRepair executable on Windows
+    # WSL allows executing Windows .exe binaries directly if they are in /mnt/
+    exe_path = "./MeshRepair/MeshRepair.exe" 
+    
+    if not os.path.exists(exe_path):
+        raise FileNotFoundError(f"Could not find MeshRepair.exe at {exe_path}")
+
+    # Convert your Linux file paths so the Windows executable understands them
+    win_input = convert_to_windows_path(input_file)
+    win_output = convert_to_windows_path(output_file)
+    
+    print(f"Repairing {input_file} using Windows API...")
+    
+    # Build the execution command
+    command = [
+        exe_path,
+        "--inputFilePath", win_input,
+        "--outputFilePath", win_output
+    ]
+    
+    try:
+        # Run the Windows tool from WSL
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        print("Repair complete!")
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("An error occurred during repair:")
+        print(e.stderr)
+
+
+def repair_mesh_with_windows(mesh):
+    """
+    Repair a Trimesh mesh using Windows MeshRepair.exe.
+
+    Uses a Windows-visible directory on the D: drive rather than
+    \\wsl.localhost paths.
+    """
+
+    import os
+    import shutil
+    import subprocess
+    import uuid
+    import trimesh
+
+    if mesh is None:
+        raise ValueError(
+            "repair_mesh_with_windows() received None"
+        )
+
+    exe_path = "./MeshRepair/MeshRepair.exe"
+
+    if not os.path.exists(exe_path):
+        raise FileNotFoundError(
+            f"Could not find MeshRepair.exe at {exe_path}"
+        )
+
+    # ---------------------------------------------------------
+    # IMPORTANT:
+    # Use the project directory on D:, not /tmp.
+    # ---------------------------------------------------------
+
+    project_dir = os.path.dirname(
+        os.path.abspath(__file__)
+    )
+
+    repair_root = os.path.join(
+        project_dir,
+        "windows_repair_temp"
+    )
+
+    os.makedirs(
+        repair_root,
+        exist_ok=True
+    )
+
+    repair_id = uuid.uuid4().hex[:12]
+
+    repair_dir = os.path.join(
+        repair_root,
+        repair_id
+    )
+
+    os.makedirs(
+        repair_dir
+    )
+
+    input_stl = os.path.join(
+        repair_dir,
+        "input.stl"
+    )
+
+    output_dir = os.path.join(
+        repair_dir,
+        "repaired"
+    )
+
+    os.makedirs(
+        output_dir
+    )
+
+    try:
+
+        print("\n========== WINDOWS MESH REPAIR ==========")
+
+        print(
+            f"[Windows Repair] Input mesh: "
+            f"{len(mesh.vertices)} vertices, "
+            f"{len(mesh.faces)} faces"
+        )
+
+        print(
+            f"[Windows Repair] Input watertight: "
+            f"{mesh.is_watertight}"
+        )
+
+        # Export STL
+
+        mesh.export(input_stl)
+
+        print(
+            f"[Windows Repair] WSL input path:"
+        )
+        print(
+            f"    {input_stl}"
+        )
+
+        print(
+            f"[Windows Repair] WSL output path:"
+        )
+        print(
+            f"    {output_dir}"
+        )
+
+        # Convert to native Windows paths
+
+        win_input = convert_to_windows_path(
+            input_stl
+        )
+
+        win_output = convert_to_windows_path(
+            output_dir
+        )
+
+        print(
+            f"[Windows Repair] Windows input:"
+        )
+        print(
+            f"    {win_input}"
+        )
+
+        print(
+            f"[Windows Repair] Windows output:"
+        )
+        print(
+            f"    {win_output}"
+        )
+
+        # Run MeshRepair
+
+        command = [
+            exe_path,
+            "--inputFilePath",
+            win_input,
+            "--outputFilePath",
+            win_output,
+            "--timeoutSeconds",
+            "600"
+        ]
+
+        print(
+            "[Windows Repair] Running MeshRepair..."
+        )
+
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True
+        )
+
+        print(
+            "[Windows Repair] Return code:",
+            result.returncode
+        )
+
+        if result.stdout:
+            print(
+                "\n[Windows Repair] stdout:"
+            )
+            print(
+                result.stdout
+            )
+
+        if result.stderr:
+            print(
+                "\n[Windows Repair] stderr:"
+            )
+            print(
+                result.stderr
+            )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                "MeshRepair returned a non-zero exit code."
+            )
+
+        # Find output files
+
+        repaired_files = []
+
+        for root, dirs, files in os.walk(
+            output_dir
+        ):
+            for filename in files:
+
+                extension = os.path.splitext(
+                    filename
+                )[1].lower()
+
+                if extension in (
+                    ".stl",
+                    ".3mf",
+                    ".obj"
+                ):
+                    repaired_files.append(
+                        os.path.join(
+                            root,
+                            filename
+                        )
+                    )
+
+        print(
+            "\n[Windows Repair] Output files:"
+        )
+
+        for path in repaired_files:
+            print(
+                f"    {path}"
+            )
+
+        if not repaired_files:
+            raise RuntimeError(
+                "MeshRepair produced no output mesh."
+            )
+
+        stl_files = [
+            p for p in repaired_files
+            if p.lower().endswith(".stl")
+        ]
+
+        if stl_files:
+            repaired_file = stl_files[0]
+
+        else:
+            threemf_files = [
+                p for p in repaired_files
+                if p.lower().endswith(".3mf")
+            ]
+
+            if not threemf_files:
+                raise RuntimeError(
+                    "No STL or 3MF output found."
+                )
+
+            repaired_file = threemf_files[0]
+
+        print(
+            "\n[Windows Repair] Loading:"
+        )
+        print(
+            f"    {repaired_file}"
+        )
+
+        # Load repaired mesh
+
+        repaired_mesh = trimesh.load_mesh(
+            repaired_file,
+            process=False
+        )
+
+        if isinstance(
+            repaired_mesh,
+            trimesh.Scene
+        ):
+
+            geometries = [
+                geometry
+                for geometry in
+                repaired_mesh.geometry.values()
+                if isinstance(
+                    geometry,
+                    trimesh.Trimesh
+                )
+            ]
+
+            if not geometries:
+                raise RuntimeError(
+                    "MeshRepair produced an empty Scene."
+                )
+
+            repaired_mesh = (
+                trimesh.util.concatenate(
+                    geometries
+                )
+            )
+
+        repaired_mesh.remove_unreferenced_vertices()
+
+        print(
+            f"\n[Windows Repair] Output: "
+            f"{len(repaired_mesh.vertices)} vertices, "
+            f"{len(repaired_mesh.faces)} faces"
+        )
+
+        print(
+            f"[Windows Repair] Watertight: "
+            f"{repaired_mesh.is_watertight}"
+        )
+
+        print(
+            f"[Windows Repair] Winding consistent: "
+            f"{repaired_mesh.is_winding_consistent}"
+        )
+
+        print(
+            "========================================\n"
+        )
+
+        return repaired_mesh
+
+    finally:
+        # Delete temporary files
+
+        try:
+            shutil.rmtree(
+                repair_dir,
+                ignore_errors=True
+            )
+        except Exception:
+            pass
+
 def slicing_function(mesh, z):
     """Obtains Trimesh section at a single layer.
         Since this function is only used in 3-axis mode, the slicing direction will always be normal to the build plate.
@@ -1231,30 +1584,57 @@ def write_5_axis_gcode(newFile, savedFileName, printSettings, startingPositions,
         rotated_coords = coords_array @ rotation_matrix.T
         return rotated_coords
 
-    def transform_paths_to_printable_orientation(layer_paths, transformation_matrices, DCM_AB):  # Works with both linearrings and linestrings
+    def transform_paths_to_printable_orientation(layer_paths, transformation_matrices, DCM_AB):
         """
         Convert a list of layers (each containing multiple LineStrings or LinearRings) to 3D line segments,
-        applying the appropriate transformation matrix for each layer."""
-        
+        applying the appropriate transformation matrix for each layer.
+        """
+
         printable_pathPoints = []
         midLayer_Z_Heights = []
 
-        for layer_idx, (paths, transform) in enumerate(zip(layer_paths, transformation_matrices)):
+        for layer_idx, (paths, transform) in enumerate(
+            zip(layer_paths, transformation_matrices)
+        ):
             layerPaths = []
-            # Handle each path in the current layer
+            layer_z = None
+
             for path in paths:
-                
-                # Get 2D coordinates from the path
+
                 coords_2d = np.array(path.coords)
 
-                # Transform each point in the path
-                coords_3d = np.array([transform_point(point, transform) for point in coords_2d])
-                
-                printable_coords_3d = np.array([np.matmul(DCM_AB, point3D) for point3D in coords_3d])
+                if len(coords_2d) == 0:
+                    continue
 
-                layerPaths.append([(point[0], point[1]) for point in printable_coords_3d])
+                coords_3d = np.array(
+                    [transform_point(point, transform) for point in coords_2d]
+                )
+
+                printable_coords_3d = np.array(
+                    [np.matmul(DCM_AB, point3D) for point3D in coords_3d]
+                )
+
+                if len(printable_coords_3d) == 0:
+                    continue
+
+                layerPaths.append(
+                    [(point[0], point[1]) for point in printable_coords_3d]
+                )
+
+                # Use the first valid path in this layer to determine
+                # the layer's printable Z height.
+                if layer_z is None:
+                    layer_z = printable_coords_3d[0][2]
+
             printable_pathPoints.append(layerPaths)
-            midLayer_Z_Heights.append(printable_coords_3d[0][2])
+
+            if layer_z is not None:
+                midLayer_Z_Heights.append(layer_z)
+            else:
+                print(
+                    f"[Warning] Layer {layer_idx} contains no printable paths."
+                )
+                midLayer_Z_Heights.append(np.nan)
 
         return printable_pathPoints, midLayer_Z_Heights
 

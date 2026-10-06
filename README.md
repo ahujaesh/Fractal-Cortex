@@ -13,8 +13,8 @@ sudo apt install -y libglu1-mesa libgl1-mesa-glx libgl1-mesa-dri python3-tk
 conda create -n fractal-env python=3.10.11 -y
 conda activate fractal-env
 python -m pip install --upgrade pip
-python -m pip install mapbox-earcut manifold3d glooey==0.3.6 numpy==1.26.4 numpy-stl==3.1.1 pyglet==1.5.28 pyOpenGL==3.1.0 shapely==2.0.4 trimesh==4.3.1 scipy rtree networkx more-itertools==8.14.0
-PYTHONWARNINGS=ignore python -u slicer_main.py
+python -m pip install mapbox-earcut manifold3d glooey==0.3.6 numpy==1.26.4 numpy-stl==3.1.1 pyglet==1.5.28 pyOpenGL==3.1.0 shapely==2.0.4 trimesh==4.3.1 scipy rtree networkx more-itertools==8.14.0 lxml
+python -u slicer_main.py
 ```
 Original work:
 Brogan, Dan. “fractalrobotics/Fractal-Cortex: A Multidirectional 5-Axis FDM Slicer.” 2025, https://github.com/fractalrobotics/Fractal-Cortex.

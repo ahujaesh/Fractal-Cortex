@@ -295,7 +295,7 @@ class Graphics_Window(pyglet.window.Window):  # Custom pyglet window which conta
         self.calculation_in_progress = False
 
     def check_calculation_results(self, dt):
-        print(">>> CHECK_CALCULATION_RESULTS TICK")
+        #print(">>> CHECK_CALCULATION_RESULTS TICK")
 
         """
         Process completed background calculations on the pyglet GUI thread.
@@ -1524,6 +1524,16 @@ class Render_Model:
         normalVbo = GLuint()
         indexVbo = GLuint()
         self.stlMesh = trimesh.load_mesh(stlFilePath)
+
+        if not self.stlMesh.is_watertight:
+            try:
+                self.stlMesh = repair_mesh_with_windows(self.stlMesh)
+            except Exception as e:
+                print(f"[Warning] Windows mesh repair failed: {e}")
+                print("[Warning] Continuing with the original mesh.")
+        else:
+            print("[STL] Mesh is already watertight. Skipping repair.")
+         
         self.__class__.D_stlMeshes[index] = self.stlMesh
         if not self.stlMesh.is_watertight:
             self.stlMesh.fix_normals()
