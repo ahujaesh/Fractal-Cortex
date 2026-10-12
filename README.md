@@ -16,8 +16,13 @@ python -m pip install --upgrade pip
 python -m pip install mapbox-earcut manifold3d glooey==0.3.6 numpy==1.26.4 numpy-stl==3.1.1 pyglet==1.5.28 pyOpenGL==3.1.0 shapely==2.0.4 trimesh==4.3.1 scipy rtree networkx more-itertools==8.14.0 lxml
 python -u slicer_main.py
 ```
+Cite this derivitive with:
+
+Ahuja, E. (2026). ahujaesh/Fractal-Cortex: A Multidirectional 5-Axis FDM Slicer (Version v1.0.0-bioprint) [Python]. https://github.com/ahujaesh/Fractal-Cortex
+
 Original work:
-Brogan, Dan. “fractalrobotics/Fractal-Cortex: A Multidirectional 5-Axis FDM Slicer.” 2025, https://github.com/fractalrobotics/Fractal-Cortex.
+
+Brogan, D. (2025). fractalrobotics/Fractal-Cortex: A Multidirectional 5-Axis FDM Slicer [Python]. Fractal Robotics. https://github.com/fractalrobotics/Fractal-Cortex
 
 The original README.md is retained below.
 
