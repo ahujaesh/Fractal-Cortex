@@ -287,16 +287,9 @@ class Graphics_Window(pyglet.window.Window):  # Custom pyglet window which conta
 
         print(">>> CHECK CALLBACK SCHEDULED")
 
-        def test_clock(dt):
-            print(">>> PYGLET CLOCK IS TICKING")
-
-        pyglet.clock.schedule_interval(test_clock, 1.0)
-
         self.calculation_in_progress = False
 
     def check_calculation_results(self, dt):
-        #print(">>> CHECK_CALCULATION_RESULTS TICK")
-
         """
         Process completed background calculations on the pyglet GUI thread.
 

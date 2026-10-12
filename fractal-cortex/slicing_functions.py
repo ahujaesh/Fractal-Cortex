@@ -75,13 +75,11 @@ def repair_3d_model(input_file, output_file):
     if not os.path.exists(exe_path):
         raise FileNotFoundError(f"Could not find MeshRepair.exe at {exe_path}")
 
-    # Convert your Linux file paths so the Windows executable understands them
     win_input = convert_to_windows_path(input_file)
     win_output = convert_to_windows_path(output_file)
     
     print(f"Repairing {input_file} using Windows API...")
     
-    # Build the execution command
     command = [
         exe_path,
         "--inputFilePath", win_input,
@@ -123,11 +121,6 @@ def repair_mesh_with_windows(mesh):
         raise FileNotFoundError(
             f"Could not find MeshRepair.exe at {exe_path}"
         )
-
-    # ---------------------------------------------------------
-    # IMPORTANT:
-    # Use the project directory on D:, not /tmp.
-    # ---------------------------------------------------------
 
     project_dir = os.path.dirname(
         os.path.abspath(__file__)
@@ -391,15 +384,12 @@ def repair_mesh_with_windows(mesh):
             f"{repaired_mesh.is_winding_consistent}"
         )
 
-        print(
-            "========================================\n"
-        )
+        print("========================================\n")
 
         return repaired_mesh
 
     finally:
         # Delete temporary files
-
         try:
             shutil.rmtree(
                 repair_dir,
